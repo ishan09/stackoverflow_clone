@@ -2,10 +2,10 @@ import Config
 
 # Configure your database
 config :stackoverflow_clone, StackoverflowClone.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "stackoverflow_clone_dev",
+  username: System.get_env("POSTGRES_USER") || "postgres",
+  password: System.get_env("POSTGRES_PASSWORD") || "postgres",
+  hostname: System.get_env("POSTGRES_HOST") || "localhost",
+  database: System.get_env("POSTGRES_DB") || "stackoverflow_clone_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
@@ -19,7 +19,11 @@ config :stackoverflow_clone, StackoverflowClone.Repo,
 config :stackoverflow_clone, StackoverflowCloneWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}, port: 4000],
+  # Use PHX_IP environment variable to override (e.g., "0.0.0.0" for Docker)
+  http: [
+    ip: if(System.get_env("PHX_IP") == "0.0.0.0", do: {0, 0, 0, 0}, else: {127, 0, 0, 1}),
+    port: 4000
+  ],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,

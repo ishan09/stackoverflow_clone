@@ -1,0 +1,37 @@
+# Use the official Elixir Alpine image
+FROM elixir:1.18-otp-27-alpine
+
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
+    inotify-tools \
+    postgresql-client
+
+# Install hex and rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+# Set working directory
+WORKDIR /app
+
+# Copy mix files
+COPY mix.exs mix.lock ./
+
+# Install mix dependencies
+RUN mix deps.get
+
+# Copy the application code
+COPY . .
+
+# Copy and set permissions for entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Compile the application
+RUN mix compile
+
+# Expose the Phoenix port
+EXPOSE 4000
+
+# Use the entrypoint script
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

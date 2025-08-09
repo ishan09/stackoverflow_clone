@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: stackoverflow_clone_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  phoenix:
+    build:
+      context: .
+      dockerfile: Dockerfile.phoenix
+    ports:
+      - "4000:4000"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stackoverflow_clone_dev
+      PHX_HOST: localhost
+      PHX_PORT: 4000
+      PHX_IP: "0.0.0.0"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: T2QjpKl89+XgwkpFvfe+B6lTt17s3oN4vFYtx+ylABYxT5j5rYd0medHLnPaJxon
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/deps
+      - /app/_build
+
+  react:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://phoenix:4000
+      - VITE_HOST=0.0.0.0
+    depends_on:
+      - phoenix
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
