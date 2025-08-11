@@ -10,8 +10,9 @@ defmodule StackoverflowClone.Application do
     children = [
       StackoverflowCloneWeb.Telemetry,
       StackoverflowClone.Repo,
-      {DNSCluster, query: Application.get_env(:stackoverflow_clone, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: StackoverflowClone.PubSub},
+      # {DNSCluster,
+      #  query: Application.get_env(:stackoverflow_clone, :dns_cluster_query) || :ignore},
+      # {Phoenix.PubSub, name: StackoverflowClone.PubSub},
       # Start a worker by calling: StackoverflowClone.Worker.start_link(arg)
       # {StackoverflowClone.Worker, arg},
       # Start to serve requests, typically the last entry

@@ -25,3 +25,8 @@ config :logger, level: :warning
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Configure mocks for testing
+config :stackoverflow_clone,
+  stackoverflow_client: StackoverflowClone.StackOverflowClientMock,
+  llm_manager: StackoverflowClone.AI.LLMManagerMock

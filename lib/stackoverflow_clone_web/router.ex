@@ -7,6 +7,10 @@ defmodule StackoverflowCloneWeb.Router do
 
   scope "/api", StackoverflowCloneWeb do
     pipe_through :api
+
+    get "/search", SearchController, :search
+    get "/questions/latest", QuestionsController, :latest
+    get "/questions/:question_id/answers", SearchController, :answers
   end
 
   # Enable LiveDashboard in development

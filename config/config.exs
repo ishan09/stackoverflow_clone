@@ -30,6 +30,16 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :stackoverflow_clone,
+  openai_api_key: System.get_env("OPENAI_API_KEY", ""),
+  ollama_base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
+  llm_provider: :ollama,
+  # llm_provider: :openai,
+  llm_models: %{
+    ollama: "llama3.2",
+    openai: "gpt-4o-mini-2024-07-18"
+  }
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

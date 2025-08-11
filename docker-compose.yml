@@ -31,6 +31,7 @@ services:
       PHX_PORT: 4000
       PHX_IP: "0.0.0.0"
       PHX_SERVER: "true"
+      OLLAMA_BASE_URL: "host.docker.internal:11434"
       SECRET_KEY_BASE: T2QjpKl89+XgwkpFvfe+B6lTt17s3oN4vFYtx+ylABYxT5j5rYd0medHLnPaJxon
     depends_on:
       db:

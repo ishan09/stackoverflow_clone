@@ -25,7 +25,22 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 stackoverflow_clone-*.tar
 
-/frontend/node_modules
+# Frontend dependencies and build artifacts
+/frontend/node_modules/
+
+# IDE and editor files
+.vscode/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+
 
 # Log files
 *.log
+# Elixir Language Server
+# /.elixir_ls/
+
+# Flowbite React generated files
+/frontend/.flowbite-react/
+.flowbite-react/
