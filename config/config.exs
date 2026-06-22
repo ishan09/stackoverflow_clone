@@ -1,17 +1,9 @@
-# This file is responsible for configuring your application
-# and its dependencies with the aid of the Config module.
-#
-# This configuration file is loaded before any dependency and
-# is restricted to this project.
-
-# General application configuration
 import Config
 
 config :stackoverflow_clone,
   ecto_repos: [StackoverflowClone.Repo],
   generators: [timestamp_type: :utc_datetime]
 
-# Configures the endpoint
 config :stackoverflow_clone, StackoverflowCloneWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
@@ -22,24 +14,36 @@ config :stackoverflow_clone, StackoverflowCloneWeb.Endpoint,
   pubsub_server: StackoverflowClone.PubSub,
   live_view: [signing_salt: "Pf6N5/S7"]
 
-# Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :oban_job_id, :oban_queue, :oban_worker]
 
-# Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Oban background job processing (uses the main Postgres repo)
+config :stackoverflow_clone, Oban,
+  repo: StackoverflowClone.Repo,
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    {Oban.Plugins.Stager, interval: 1_000}
+  ],
+  queues: [
+    default: 10,
+    reels: 5
+  ]
+
+# Provider defaults — overridden per environment in runtime.exs
 config :stackoverflow_clone,
   openai_api_key: System.get_env("OPENAI_API_KEY", ""),
   ollama_base_url: System.get_env("OLLAMA_BASE_URL", "http://localhost:11434"),
+  slack_bot_token: System.get_env("SLACK_BOT_TOKEN", ""),
+  slack_signing_secret: System.get_env("SLACK_SIGNING_SECRET", ""),
+  transcription_provider: :local,
   llm_provider: :ollama,
-  # llm_provider: :openai,
   llm_models: %{
     ollama: "llama3.2",
     openai: "gpt-4o-mini-2024-07-18"
-  }
+  },
+  transcript_max_length: 500
 
-# Import environment specific config. This must remain at the bottom
-# of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
