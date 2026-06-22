@@ -1,37 +1,46 @@
-# Use the official Elixir Alpine image
 FROM elixir:1.18-otp-27-alpine
 
-# Install build dependencies
+# cmake   — required to build exqlite NIF (bundled SQLite in ecto_sqlite3)
+# ffmpeg  — audio extraction from downloaded reels
+# python3 + yt-dlp — video download
+# curl    — yt-dlp binary fetch
 RUN apk add --no-cache \
     build-base \
+    cmake \
     inotify-tools \
-    postgresql-client
+    postgresql-client \
+    ffmpeg \
+    python3 \
+    py3-pip \
+    curl
+
+# yt-dlp — standalone binary, no Python dependency at runtime
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    -o /usr/local/bin/yt-dlp \
+    && chmod +x /usr/local/bin/yt-dlp
+
+# openai-whisper — local transcription support.
+# Remove this line to keep the image lean when using TRANSCRIPTION_PROVIDER=openai.
+# First run will download the model (~140MB for "base") into /root/.cache/whisper.
+RUN pip3 install --break-system-packages openai-whisper
 
 # Install hex and rebar
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# Set working directory
 WORKDIR /app
 
-# Copy mix files
+# Fetch deps before copying source so layer is cached on code-only changes
 COPY mix.exs mix.lock ./
-
-# Install mix dependencies
 RUN mix deps.get
 
-# Copy the application code
 COPY . .
 
-# Copy and set permissions for entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Compile the application
 RUN mix compile
 
-# Expose the Phoenix port
 EXPOSE 4000
 
-# Use the entrypoint script
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
