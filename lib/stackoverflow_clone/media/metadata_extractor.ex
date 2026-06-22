@@ -1,24 +1,27 @@
 defmodule StackoverflowClone.Media.MetadataExtractor do
   @moduledoc """
-  Extracts metadata (caption, title, etc.) from a video URL using yt-dlp --dump-json.
-  Works for Instagram reels/posts and YouTube videos/shorts.
-  Does NOT download the video — fast, network-only call.
+  Extracts metadata (caption, title, platform, etc.) from a video URL
+  using yt-dlp --dump-json. Works for Instagram and YouTube.
+  Does NOT download the video — network-only call.
   """
+
+  @callback fetch_metadata(url :: String.t()) ::
+              {:ok, map()} | {:error, String.t()}
 
   require Logger
 
-  @type metadata :: %{
-          title: String.t() | nil,
-          caption: String.t() | nil,
-          uploader: String.t() | nil,
-          duration: number() | nil,
-          platform: String.t() | nil,
-          raw: map()
-        }
+  alias StackoverflowClone.CircuitBreaker
+  alias StackoverflowClone.Security.UrlValidator
 
-  @spec fetch_metadata(String.t()) :: {:ok, metadata()} | {:error, String.t()}
+  @spec fetch_metadata(String.t()) :: {:ok, map()} | {:error, String.t()}
   def fetch_metadata(url) do
-    Logger.info("Fetching metadata: #{url}")
+    with :ok <- UrlValidator.validate(url) do
+      CircuitBreaker.call(:yt_dlp, fn -> do_fetch(url) end)
+    end
+  end
+
+  defp do_fetch(url) do
+    Logger.info("Fetching metadata url=#{url}")
 
     args = ["--dump-json", "--no-download", "--no-warnings", url]
 
@@ -27,30 +30,23 @@ defmodule StackoverflowClone.Media.MetadataExtractor do
         parse_output(output)
 
       {output, exit_code} ->
-        snippet = String.slice(output, 0, 300)
-        Logger.warning("yt-dlp metadata exit #{exit_code}: #{snippet}")
+        Logger.warning("yt-dlp metadata exit=#{exit_code}: #{String.slice(output, 0, 300)}")
         {:error, "Metadata fetch failed (exit #{exit_code})"}
     end
   end
 
   defp parse_output(output) do
-    # yt-dlp may emit multiple JSON lines for playlists; take the first
     line = output |> String.split("\n", trim: true) |> List.first("")
 
     case Jason.decode(line) do
-      {:ok, data} ->
-        {:ok, extract_fields(data)}
-
-      {:error, _} ->
-        Logger.warning("Could not parse yt-dlp JSON output")
-        {:error, "Failed to parse metadata JSON"}
+      {:ok, data} -> {:ok, extract_fields(data)}
+      {:error, _} -> {:error, "Failed to parse metadata JSON"}
     end
   end
 
   defp extract_fields(data) do
     %{
       title: get_string(data, "title"),
-      # Instagram stores the post caption in "description"; YouTube uses "description" for the bio
       caption: get_string(data, "description"),
       uploader: get_string(data, "uploader"),
       duration: Map.get(data, "duration"),

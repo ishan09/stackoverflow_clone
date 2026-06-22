@@ -5,12 +5,20 @@ defmodule StackoverflowClone.LLM.OllamaProvider do
 
   require Logger
 
+  alias StackoverflowClone.CircuitBreaker
+  alias StackoverflowClone.RateLimiter
   alias StackoverflowClone.LLM.PromptBuilder
 
   @timeout_ms 120_000
 
   @impl true
   def summarize(assembled_input) do
+    with :ok <- RateLimiter.check(:ollama, "global") do
+      CircuitBreaker.call(:ollama, fn -> do_summarize(assembled_input) end)
+    end
+  end
+
+  defp do_summarize(assembled_input) do
     base_url = Application.get_env(:stackoverflow_clone, :ollama_base_url, "http://localhost:11434")
     model = get_model()
 

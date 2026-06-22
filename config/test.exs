@@ -33,4 +33,11 @@ config :stackoverflow_clone,
   slack_bot_token: "test-token",
   slack_signing_secret: "test-secret",
   # Skip HMAC verification in tests so controllers can be called directly
-  skip_slack_verification: true
+  skip_slack_verification: true,
+  # Injectable mock modules for unit tests
+  downloader_module: StackoverflowClone.Media.DownloaderMock,
+  audio_extractor_module: StackoverflowClone.Media.AudioExtractorMock,
+  metadata_extractor_module: StackoverflowClone.Media.MetadataExtractorMock,
+  slack_client_module: StackoverflowClone.Slack.ClientMock,
+  transcription_module: StackoverflowClone.Transcription.ProviderMock,
+  llm_module: StackoverflowClone.LLM.ProviderMock

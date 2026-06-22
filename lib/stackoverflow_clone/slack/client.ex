@@ -1,13 +1,22 @@
 defmodule StackoverflowClone.Slack.Client do
   @moduledoc "Thin wrapper around the Slack Web API."
 
+  @callback reply_to_thread(channel :: String.t(), thread_ts :: String.t(), text :: String.t()) ::
+              :ok | {:error, String.t()}
+
   require Logger
+
+  alias StackoverflowClone.CircuitBreaker
 
   @api_base "https://slack.com/api"
   @timeout_ms 15_000
 
   @spec reply_to_thread(String.t(), String.t(), String.t()) :: :ok | {:error, String.t()}
   def reply_to_thread(channel, thread_ts, text) do
+    CircuitBreaker.call(:slack, fn -> do_reply(channel, thread_ts, text) end)
+  end
+
+  defp do_reply(channel, thread_ts, text) do
     body = %{channel: channel, thread_ts: thread_ts, text: text}
 
     case post("chat.postMessage", body) do

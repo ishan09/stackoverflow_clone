@@ -1,14 +1,27 @@
 defmodule StackoverflowClone.Media.Downloader do
   @moduledoc "Downloads video from a URL using yt-dlp."
 
+  @callback download(url :: String.t()) :: {:ok, String.t()} | {:error, String.t()}
+
   require Logger
+
+  alias StackoverflowClone.CircuitBreaker
+  alias StackoverflowClone.Security.UrlValidator
+
+  @impl_mod __MODULE__
 
   @spec download(String.t()) :: {:ok, String.t()} | {:error, String.t()}
   def download(url) do
+    with :ok <- UrlValidator.validate(url) do
+      CircuitBreaker.call(:yt_dlp, fn -> do_download(url) end)
+    end
+  end
+
+  defp do_download(url) do
     job_id = random_id()
     output_template = "/tmp/reel_#{job_id}.%(ext)s"
 
-    Logger.info("Downloading reel #{job_id}: #{url}")
+    Logger.info("Downloading job=#{job_id} url=#{url}")
 
     args = [
       "--no-playlist",
@@ -23,15 +36,13 @@ defmodule StackoverflowClone.Media.Downloader do
         find_downloaded_file(job_id)
 
       {output, exit_code} ->
-        Logger.error("yt-dlp exited #{exit_code}: #{output}")
+        Logger.error("yt-dlp exit=#{exit_code} output=#{String.slice(output, 0, 300)}")
         {:error, "Download failed (exit #{exit_code})"}
     end
   end
 
   defp find_downloaded_file(job_id) do
-    pattern = "/tmp/reel_#{job_id}.*"
-
-    case Path.wildcard(pattern) do
+    case Path.wildcard("/tmp/reel_#{job_id}.*") do
       [path | _] -> {:ok, path}
       [] -> {:error, "Downloaded file not found for job #{job_id}"}
     end

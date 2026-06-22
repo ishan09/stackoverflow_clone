@@ -5,6 +5,9 @@ defmodule StackoverflowClone.Transcription.OpenAIWhisperProvider do
 
   require Logger
 
+  alias StackoverflowClone.CircuitBreaker
+  alias StackoverflowClone.RateLimiter
+
   @whisper_url "https://api.openai.com/v1/audio/transcriptions"
   @timeout_ms 120_000
 
@@ -15,7 +18,9 @@ defmodule StackoverflowClone.Transcription.OpenAIWhisperProvider do
     if api_key == "" do
       {:error, "OPENAI_API_KEY not configured"}
     else
-      do_transcribe(audio_path, api_key)
+      with :ok <- RateLimiter.check(:openai, "global") do
+        CircuitBreaker.call(:openai, fn -> do_transcribe(audio_path, api_key) end)
+      end
     end
   end
 

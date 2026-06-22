@@ -5,6 +5,8 @@ defmodule StackoverflowClone.LLM.OpenAIProvider do
 
   require Logger
 
+  alias StackoverflowClone.CircuitBreaker
+  alias StackoverflowClone.RateLimiter
   alias StackoverflowClone.LLM.PromptBuilder
 
   @base_url "https://api.openai.com/v1"
@@ -17,7 +19,9 @@ defmodule StackoverflowClone.LLM.OpenAIProvider do
     if api_key == "" do
       {:error, "OPENAI_API_KEY not configured"}
     else
-      do_summarize(assembled_input, api_key)
+      with :ok <- RateLimiter.check(:openai, "global") do
+        CircuitBreaker.call(:openai, fn -> do_summarize(assembled_input, api_key) end)
+      end
     end
   end
 

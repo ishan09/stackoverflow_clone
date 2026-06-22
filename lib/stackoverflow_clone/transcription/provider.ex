@@ -9,9 +9,16 @@ defmodule StackoverflowClone.Transcription.Provider do
   end
 
   defp resolve_provider do
-    case Application.get_env(:stackoverflow_clone, :transcription_provider, :local) do
-      :openai -> OpenAIWhisperProvider
-      _ -> LocalWhisperProvider
+    # Allow test injection via :transcription_module; fall back to runtime provider config
+    case Application.get_env(:stackoverflow_clone, :transcription_module) do
+      nil ->
+        case Application.get_env(:stackoverflow_clone, :transcription_provider, :local) do
+          :openai -> OpenAIWhisperProvider
+          _ -> LocalWhisperProvider
+        end
+
+      mod ->
+        mod
     end
   end
 end

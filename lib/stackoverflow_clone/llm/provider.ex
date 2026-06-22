@@ -9,9 +9,16 @@ defmodule StackoverflowClone.LLM.Provider do
   end
 
   defp resolve_provider do
-    case Application.get_env(:stackoverflow_clone, :llm_provider, :ollama) do
-      :openai -> OpenAIProvider
-      _ -> OllamaProvider
+    # Allow test injection via :llm_module; fall back to runtime provider config
+    case Application.get_env(:stackoverflow_clone, :llm_module) do
+      nil ->
+        case Application.get_env(:stackoverflow_clone, :llm_provider, :ollama) do
+          :openai -> OpenAIProvider
+          _ -> OllamaProvider
+        end
+
+      mod ->
+        mod
     end
   end
 end

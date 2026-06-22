@@ -24,12 +24,6 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
 
   alias StackoverflowClone.Reels
   alias StackoverflowClone.ContentAssembler
-  alias StackoverflowClone.Media.Downloader
-  alias StackoverflowClone.Media.AudioExtractor
-  alias StackoverflowClone.Media.MetadataExtractor
-  alias StackoverflowClone.Transcription.Provider, as: TranscriptionProvider
-  alias StackoverflowClone.LLM.Provider, as: LLMProvider
-  alias StackoverflowClone.Slack.Client, as: SlackClient
   alias StackoverflowClone.Slack.Formatter
 
   @impl Oban.Worker
@@ -40,17 +34,22 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
     Logger.metadata(oban_job_id: job_id)
     Logger.info("Processing: #{url}")
 
+    downloader = module(:downloader_module, StackoverflowClone.Media.Downloader)
+    audio_extractor = module(:audio_extractor_module, StackoverflowClone.Media.AudioExtractor)
+    metadata_extractor = module(:metadata_extractor_module, StackoverflowClone.Media.MetadataExtractor)
+    slack_client = module(:slack_client_module, StackoverflowClone.Slack.Client)
+
     with {:ok, reel} <- Reels.find_or_create(url),
-         :ok <- skip_if_processed(reel, channel, thread_ts),
+         :ok <- skip_if_processed(reel, channel, thread_ts, slack_client),
          {:ok, _} <- Reels.update_status(reel, :processing),
-         {:ok, video_path} <- Downloader.download(url),
-         {caption, raw_metadata} <- fetch_metadata_soft(url),
-         {:ok, audio_path} <- AudioExtractor.extract(video_path),
+         {:ok, video_path} <- downloader.download(url),
+         {caption, raw_metadata} <- fetch_metadata_soft(url, metadata_extractor),
+         {:ok, audio_path} <- audio_extractor.extract(video_path),
          {transcript, temp_files} <- transcribe_soft(audio_path, [video_path]),
          {:ok, processed_input} <- assemble(caption, transcript),
          {:ok, summary} <- summarize(processed_input),
          {:ok, reel} <- persist(reel, caption, transcript, processed_input, summary, raw_metadata),
-         :ok <- reply_to_slack(channel, thread_ts, reel) do
+         :ok <- reply_to_slack(channel, thread_ts, reel, slack_client) do
       cleanup(temp_files)
       Logger.info("Processed successfully: #{url}")
       :ok
@@ -67,9 +66,8 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
 
   # ── Step helpers ───────────────────────────────────────────────────────────
 
-  # Metadata is best-effort; a missing caption doesn't block processing.
-  defp fetch_metadata_soft(url) do
-    case MetadataExtractor.fetch_metadata(url) do
+  defp fetch_metadata_soft(url, metadata_extractor) do
+    case metadata_extractor.fetch_metadata(url) do
       {:ok, %{caption: caption, raw: raw}} ->
         Logger.info("caption_present=#{!is_nil(caption)}")
         {caption, raw}
@@ -80,10 +78,18 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
     end
   end
 
-  # Transcription is best-effort when caption is available.
-  # Returns {transcript | nil, temp_file_paths}.
   defp transcribe_soft(audio_path, existing_temp_files) do
-    case TranscriptionProvider.transcribe(audio_path) do
+    transcription_mod = module(:transcription_module, nil)
+    provider = StackoverflowClone.Transcription.Provider
+
+    transcribe_fn =
+      if transcription_mod do
+        fn path -> transcription_mod.transcribe(path) end
+      else
+        fn path -> provider.transcribe(path) end
+      end
+
+    case transcribe_fn.(audio_path) do
       {:ok, transcript} ->
         Logger.info("transcript_length=#{String.length(transcript)}")
         {transcript, [audio_path | existing_temp_files]}
@@ -108,7 +114,14 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
   defp summarize(processed_input) do
     provider = Application.get_env(:stackoverflow_clone, :llm_provider, :ollama)
     Logger.info("provider_used=#{provider}")
-    LLMProvider.summarize(processed_input)
+
+    llm_mod = module(:llm_module, nil)
+
+    if llm_mod do
+      llm_mod.summarize(processed_input)
+    else
+      StackoverflowClone.LLM.Provider.summarize(processed_input)
+    end
   end
 
   defp persist(reel, caption, transcript, processed_input, summary, raw_metadata) do
@@ -123,17 +136,17 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
 
   # ── Slack reply ────────────────────────────────────────────────────────────
 
-  defp skip_if_processed(%{status: :processed} = reel, channel, thread_ts) do
+  defp skip_if_processed(%{status: :processed} = reel, channel, thread_ts, slack_client) do
     Logger.info("Already processed, replying from cache: #{reel.url}")
-    reply_to_slack(channel, thread_ts, reel)
+    reply_to_slack(channel, thread_ts, reel, slack_client)
     {:skip, :already_processed}
   end
 
-  defp skip_if_processed(_reel, _channel, _thread_ts), do: :ok
+  defp skip_if_processed(_reel, _channel, _thread_ts, _slack_client), do: :ok
 
-  defp reply_to_slack(channel, thread_ts, reel) do
+  defp reply_to_slack(channel, thread_ts, reel, slack_client) do
     message = Formatter.format_reply(reel.summary, reel.transcript)
-    SlackClient.reply_to_thread(channel, thread_ts, message)
+    slack_client.reply_to_thread(channel, thread_ts, message)
   end
 
   # ── Cleanup ────────────────────────────────────────────────────────────────
@@ -147,5 +160,9 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
         end
       end
     end)
+  end
+
+  defp module(key, default) do
+    Application.get_env(:stackoverflow_clone, key, default)
   end
 end

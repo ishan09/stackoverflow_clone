@@ -3,6 +3,8 @@ defmodule StackoverflowCloneWeb.SlackController do
 
   require Logger
 
+  alias StackoverflowClone.RateLimiter
+  alias StackoverflowClone.Slack.EventDeduplicator
   alias StackoverflowClone.Slack.UrlExtractor
   alias StackoverflowClone.Workers.ReelProcessorWorker
 
@@ -12,6 +14,17 @@ defmodule StackoverflowCloneWeb.SlackController do
   end
 
   # Incoming event callback
+  def events(conn, %{"type" => "event_callback", "event_id" => event_id, "event" => event}) do
+    if EventDeduplicator.seen?(event_id) do
+      send_resp(conn, 200, "")
+    else
+      EventDeduplicator.mark_seen(event_id)
+      handle_slack_event(event)
+      send_resp(conn, 200, "")
+    end
+  end
+
+  # Fallback for event_callback without event_id (shouldn't happen with Slack but be safe)
   def events(conn, %{"type" => "event_callback", "event" => event}) do
     handle_slack_event(event)
     send_resp(conn, 200, "")
@@ -24,15 +37,20 @@ defmodule StackoverflowCloneWeb.SlackController do
 
   defp handle_slack_event(%{"type" => type, "text" => text, "channel" => channel} = event)
        when type in ["message", "app_mention"] do
-    # Ignore bot messages to avoid feedback loops
     unless Map.has_key?(event, "bot_id") do
-      thread_ts = Map.get(event, "thread_ts") || Map.get(event, "ts")
+      case RateLimiter.check(:slack_channel, channel) do
+        :ok ->
+          thread_ts = Map.get(event, "thread_ts") || Map.get(event, "ts")
 
-      text
-      |> UrlExtractor.extract_urls()
-      |> Enum.each(fn url ->
-        enqueue_reel(url, channel, thread_ts)
-      end)
+          text
+          |> UrlExtractor.extract_urls()
+          |> Enum.each(fn url ->
+            enqueue_reel(url, channel, thread_ts)
+          end)
+
+        {:error, :rate_limited} ->
+          Logger.warning("Rate limit hit for Slack channel=#{channel}")
+      end
     end
   end
 

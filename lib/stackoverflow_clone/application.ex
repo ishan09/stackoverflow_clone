@@ -10,6 +10,8 @@ defmodule StackoverflowClone.Application do
       StackoverflowCloneWeb.Telemetry,
       StackoverflowClone.Repo,
       StackoverflowClone.ReelsRepo,
+      StackoverflowClone.RateLimiter,
+      StackoverflowClone.Slack.EventDeduplicator,
       {Oban, Application.fetch_env!(:stackoverflow_clone, Oban)},
       StackoverflowCloneWeb.Endpoint
     ]
@@ -17,6 +19,7 @@ defmodule StackoverflowClone.Application do
     opts = [strategy: :one_for_one, name: StackoverflowClone.Supervisor]
     {:ok, sup} = Supervisor.start_link(children, opts)
 
+    StackoverflowClone.CircuitBreaker.install_all()
     run_reels_migrations()
 
     {:ok, sup}

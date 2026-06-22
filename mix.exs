@@ -42,6 +42,7 @@ defmodule StackoverflowClone.MixProject do
       {:httpoison, "~> 2.0"},
       {:html_entities, "~> 0.5"},
       {:html_sanitize_ex, "~> 1.4"},
+      {:fuse, "~> 2.5"},
       {:mox, "~> 1.0", only: :test},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false}
     ]
