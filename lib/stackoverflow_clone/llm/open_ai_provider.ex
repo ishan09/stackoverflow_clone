@@ -1,45 +1,34 @@
 defmodule StackoverflowClone.LLM.OpenAIProvider do
-  @moduledoc "Summarizes reel transcripts using the OpenAI Chat Completions API."
+  @moduledoc "Summarizes content using the OpenAI Chat Completions API."
 
   @behaviour StackoverflowClone.LLM.SummarizerBehaviour
 
   require Logger
 
+  alias StackoverflowClone.LLM.PromptBuilder
+
   @base_url "https://api.openai.com/v1"
   @timeout_ms 60_000
 
-  @system_prompt "You are a concise content summarizer for social media videos."
-
-  @user_prefix """
-  Summarize this Instagram reel transcript.
-
-  Return:
-  1. What is this about (1-2 lines)
-  2. Key insights (bullet points)
-  3. Who is it useful for
-
-  Transcript:
-  """
-
   @impl true
-  def summarize(text) do
+  def summarize(assembled_input) do
     api_key = Application.get_env(:stackoverflow_clone, :openai_api_key, "")
 
     if api_key == "" do
       {:error, "OPENAI_API_KEY not configured"}
     else
-      do_summarize(text, api_key)
+      do_summarize(assembled_input, api_key)
     end
   end
 
-  defp do_summarize(text, api_key) do
+  defp do_summarize(assembled_input, api_key) do
     model = get_model()
 
     body = %{
       model: model,
       messages: [
-        %{role: "system", content: @system_prompt},
-        %{role: "user", content: @user_prefix <> text}
+        %{role: "system", content: PromptBuilder.system_prompt()},
+        %{role: "user", content: PromptBuilder.user_message(assembled_input)}
       ],
       temperature: 0.3,
       max_tokens: 1000

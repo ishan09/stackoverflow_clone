@@ -29,7 +29,7 @@ defmodule StackoverflowCloneWeb.SlackController do
       thread_ts = Map.get(event, "thread_ts") || Map.get(event, "ts")
 
       text
-      |> UrlExtractor.extract_instagram_urls()
+      |> UrlExtractor.extract_urls()
       |> Enum.each(fn url ->
         enqueue_reel(url, channel, thread_ts)
       end)

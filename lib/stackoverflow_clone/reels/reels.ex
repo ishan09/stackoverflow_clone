@@ -27,11 +27,16 @@ defmodule StackoverflowClone.Reels do
     |> ReelsRepo.update()
   end
 
-  @spec mark_processed(Reel.t(), String.t(), String.t()) ::
-          {:ok, Reel.t()} | {:error, Ecto.Changeset.t()}
-  def mark_processed(%Reel{} = reel, transcript, summary) do
+  @doc """
+  Persists all processing results and marks the reel as processed.
+  Accepts a map with any subset of: transcript, caption, processed_input,
+  summary, raw_metadata. Extensible — add future fields to the map without
+  changing this function's signature.
+  """
+  @spec mark_processed(Reel.t(), map()) :: {:ok, Reel.t()} | {:error, Ecto.Changeset.t()}
+  def mark_processed(%Reel{} = reel, %{} = result) do
     reel
-    |> Reel.changeset(%{transcript: transcript, summary: summary, status: :processed})
+    |> Reel.changeset(Map.put(result, :status, :processed))
     |> ReelsRepo.update()
   end
 
@@ -61,9 +66,7 @@ defmodule StackoverflowClone.Reels do
 
   @spec list_reels(Keyword.t()) :: [Reel.t()]
   def list_reels(opts \\ []) do
-    query =
-      from r in Reel,
-        order_by: [desc: r.inserted_at]
+    query = from r in Reel, order_by: [desc: r.inserted_at]
 
     query =
       case Keyword.get(opts, :status) do
@@ -71,13 +74,10 @@ defmodule StackoverflowClone.Reels do
         status -> from r in query, where: r.status == ^status
       end
 
-    limit = Keyword.get(opts, :limit)
-
     query =
-      if limit do
-        from r in query, limit: ^limit
-      else
-        query
+      case Keyword.get(opts, :limit) do
+        nil -> query
+        limit -> from r in query, limit: ^limit
       end
 
     ReelsRepo.all(query)

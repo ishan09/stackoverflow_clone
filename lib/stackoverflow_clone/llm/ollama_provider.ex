@@ -1,41 +1,23 @@
 defmodule StackoverflowClone.LLM.OllamaProvider do
-  @moduledoc "Summarizes reel transcripts using a locally running Ollama instance."
+  @moduledoc "Summarizes content using a locally running Ollama instance."
 
   @behaviour StackoverflowClone.LLM.SummarizerBehaviour
 
   require Logger
 
+  alias StackoverflowClone.LLM.PromptBuilder
+
   @timeout_ms 120_000
 
-  @system_prompt """
-  You are a concise content summarizer. When given a transcript, return a plain-text summary
-  with exactly three sections separated by blank lines:
-  1. What this is about (1-2 sentences)
-  2. Key insights (bullet points starting with -)
-  3. Who it is useful for (1 sentence)
-  Do not add headers or extra formatting.
-  """
-
-  @user_prefix """
-  Summarize this Instagram reel transcript.
-
-  Return:
-  1. What is this about (1-2 lines)
-  2. Key insights (bullet points)
-  3. Who is it useful for
-
-  Transcript:
-  """
-
   @impl true
-  def summarize(text) do
+  def summarize(assembled_input) do
     base_url = Application.get_env(:stackoverflow_clone, :ollama_base_url, "http://localhost:11434")
     model = get_model()
 
     body = %{
       model: model,
-      system: @system_prompt,
-      prompt: @user_prefix <> text,
+      system: PromptBuilder.system_prompt(),
+      prompt: PromptBuilder.user_message(assembled_input),
       stream: false,
       options: %{temperature: 0.3}
     }

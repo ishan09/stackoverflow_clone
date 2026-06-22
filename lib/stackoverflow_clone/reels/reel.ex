@@ -4,9 +4,22 @@ defmodule StackoverflowClone.Reels.Reel do
 
   @valid_statuses [:pending, :processing, :processed, :failed]
 
+  @castable_fields [
+    :url,
+    :caption,
+    :transcript,
+    :processed_input,
+    :summary,
+    :status,
+    :raw_metadata
+  ]
+
   schema "reels" do
     field :url, :string
+    field :caption, :string
     field :transcript, :string
+    # The assembled text actually sent to the LLM — stored for audit/debug
+    field :processed_input, :string
     field :summary, :string
     field :status, Ecto.Enum, values: @valid_statuses, default: :pending
     field :raw_metadata, :map
@@ -16,7 +29,7 @@ defmodule StackoverflowClone.Reels.Reel do
 
   def changeset(reel, attrs) do
     reel
-    |> cast(attrs, [:url, :transcript, :summary, :status, :raw_metadata])
+    |> cast(attrs, @castable_fields)
     |> validate_required([:url])
     |> validate_inclusion(:status, @valid_statuses)
     |> unique_constraint(:url)
