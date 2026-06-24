@@ -44,3 +44,12 @@ stackoverflow_clone-*.tar
 # Flowbite React generated files
 /frontend/.flowbite-react/
 .flowbite-react/
+
+# SQLite databases
+/priv/*.db
+/priv/*.db-shm
+/priv/*.db-wal
+
+# Environment secrets
+.env
+.env.local

@@ -23,16 +23,40 @@ services:
     ports:
       - "4000:4000"
     environment:
+      # ── Postgres ────────────────────────────────────────────────────────────
       POSTGRES_HOST: db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: stackoverflow_clone_dev
+
+      # ── Phoenix ─────────────────────────────────────────────────────────────
       PHX_HOST: localhost
-      PHX_PORT: 4000
+      PHX_PORT: "4000"
       PHX_IP: "0.0.0.0"
       PHX_SERVER: "true"
-      OLLAMA_BASE_URL: "host.docker.internal:11434"
       SECRET_KEY_BASE: T2QjpKl89+XgwkpFvfe+B6lTt17s3oN4vFYtx+ylABYxT5j5rYd0medHLnPaJxon
+
+      # ── SQLite (reels table) ─────────────────────────────────────────────────
+      REELS_DB_PATH: /data/reels.db
+
+      # ── Slack ───────────────────────────────────────────────────────────────
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+
+      # ── Transcription provider: local | openai ───────────────────────────────
+      # "local"  → whisper CLI (installed in image, downloads model on first run)
+      # "openai" → OpenAI Whisper API (requires OPENAI_API_KEY, no extra deps)
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-local}
+
+      # ── LLM provider: ollama | openai ────────────────────────────────────────
+      # "ollama" → local Ollama (add the ollama service below and uncomment depends_on)
+      # "openai" → OpenAI GPT   (requires OPENAI_API_KEY)
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+
+      # ── Provider credentials ─────────────────────────────────────────────────
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+
     depends_on:
       db:
         condition: service_healthy
@@ -40,6 +64,10 @@ services:
       - .:/app
       - /app/deps
       - /app/_build
+      # Persist SQLite database across container restarts
+      - reels_data:/data
+      # Cache whisper models so they are not re-downloaded on every container start
+      - whisper_cache:/root/.cache/whisper
 
   react:
     build:
@@ -56,5 +84,21 @@ services:
       - ./frontend:/app
       - /app/node_modules
 
+  # ── Optional: local Ollama for LLM_PROVIDER=ollama ──────────────────────────
+  # Uncomment this service and add "ollama" to phoenix.depends_on when running
+  # Ollama inside Docker instead of on the host.
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   # After first start, pull your model:
+  #   #   docker compose exec ollama ollama pull llama3.2
+
 volumes:
   postgres_data:
+  reels_data:
+  whisper_cache:
+  # ollama_data:
