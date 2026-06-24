@@ -45,7 +45,7 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
          {:ok, video_path} <- downloader.download(url),
          {caption, raw_metadata} <- fetch_metadata_soft(url, metadata_extractor),
          {:ok, audio_path} <- audio_extractor.extract(video_path),
-         {transcript, temp_files} <- transcribe_soft(audio_path, [video_path]),
+         {:ok, {transcript, temp_files}} <- transcribe_soft(audio_path, [video_path]),
          {:ok, processed_input} <- assemble(caption, transcript),
          {:ok, summary} <- summarize(processed_input),
          {:ok, reel} <- persist(reel, caption, transcript, processed_input, summary, raw_metadata),
@@ -56,6 +56,11 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
     else
       {:skip, :already_processed} ->
         :ok
+
+      {:error, {:rate_limited, retry_after_ms}} ->
+        snooze_secs = max(1, ceil(retry_after_ms / 1000))
+        Logger.info("Rate limited — snoozing #{snooze_secs}s before retry: #{url}")
+        {:snooze, snooze_secs}
 
       {:error, reason} ->
         Reels.mark_failed(url)
@@ -92,11 +97,15 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorker do
     case transcribe_fn.(audio_path) do
       {:ok, transcript} ->
         Logger.info("transcript_length=#{String.length(transcript)}")
-        {transcript, [audio_path | existing_temp_files]}
+        {:ok, {transcript, [audio_path | existing_temp_files]}}
+
+      {:error, {:rate_limited, _}} = rate_limit_err ->
+        # Propagate as a hard error so the worker snoozes instead of degrading
+        rate_limit_err
 
       {:error, reason} ->
         Logger.warning("Transcription skipped: #{reason}")
-        {nil, [audio_path | existing_temp_files]}
+        {:ok, {nil, [audio_path | existing_temp_files]}}
     end
   end
 

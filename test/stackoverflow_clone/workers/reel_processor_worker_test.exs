@@ -142,6 +142,49 @@ defmodule StackoverflowClone.Workers.ReelProcessorWorkerTest do
     end
   end
 
+  describe "perform/1 — rate limiting" do
+    test "snoozes when LLM provider is rate limited" do
+      StackoverflowClone.Media.DownloaderMock
+      |> expect(:download, fn @url -> {:ok, "/tmp/video.mp4"} end)
+
+      StackoverflowClone.Media.MetadataExtractorMock
+      |> expect(:fetch_metadata, fn @url ->
+        {:ok, %{caption: "Caption", raw: nil, title: nil, uploader: nil, duration: nil, platform: nil}}
+      end)
+
+      StackoverflowClone.Media.AudioExtractorMock
+      |> expect(:extract, fn "/tmp/video.mp4" -> {:ok, "/tmp/video.mp3"} end)
+
+      StackoverflowClone.Transcription.ProviderMock
+      |> expect(:transcribe, fn "/tmp/video.mp3" -> {:ok, "Transcript"} end)
+
+      StackoverflowClone.LLM.ProviderMock
+      |> expect(:summarize, fn _input -> {:error, {:rate_limited, 30_000}} end)
+
+      assert {:snooze, snooze_secs} = ReelProcessorWorker.perform(make_job())
+      assert snooze_secs == 30
+    end
+
+    test "snoozes when transcription provider is rate limited" do
+      StackoverflowClone.Media.DownloaderMock
+      |> expect(:download, fn @url -> {:ok, "/tmp/video.mp4"} end)
+
+      StackoverflowClone.Media.MetadataExtractorMock
+      |> expect(:fetch_metadata, fn @url ->
+        {:ok, %{caption: "Caption", raw: nil, title: nil, uploader: nil, duration: nil, platform: nil}}
+      end)
+
+      StackoverflowClone.Media.AudioExtractorMock
+      |> expect(:extract, fn "/tmp/video.mp4" -> {:ok, "/tmp/video.mp3"} end)
+
+      StackoverflowClone.Transcription.ProviderMock
+      |> expect(:transcribe, fn "/tmp/video.mp3" -> {:error, {:rate_limited, 45_500}} end)
+
+      assert {:snooze, snooze_secs} = ReelProcessorWorker.perform(make_job())
+      assert snooze_secs == 46
+    end
+  end
+
   describe "perform/1 — download failure" do
     test "marks reel as failed when download fails" do
       StackoverflowClone.Media.DownloaderMock
