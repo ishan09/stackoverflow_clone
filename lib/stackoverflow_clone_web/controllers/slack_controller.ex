@@ -48,7 +48,7 @@ defmodule StackoverflowCloneWeb.SlackController do
             enqueue_reel(url, channel, thread_ts)
           end)
 
-        {:error, :rate_limited} ->
+        {:error, {:rate_limited, _ms}} ->
           Logger.warning("Rate limit hit for Slack channel=#{channel}")
       end
     end

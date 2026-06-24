@@ -27,7 +27,7 @@ defmodule StackoverflowClone.RateLimiter do
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
-  @spec check(atom(), String.t()) :: :ok | {:error, :rate_limited}
+  @spec check(atom(), String.t()) :: :ok | {:error, {:rate_limited, non_neg_integer()}}
   def check(scope, key) when is_atom(scope) do
     {limit, scale_ms} = Map.get(@limits, scope, {100, 60_000})
     bucket = bucket_key(scope, key, scale_ms)
@@ -39,8 +39,12 @@ defmodule StackoverflowClone.RateLimiter do
     if count <= limit do
       :ok
     else
-      Logger.warning("Rate limited scope=#{scope} key=#{key} count=#{count} limit=#{limit}")
-      {:error, :rate_limited}
+      retry_after_ms = ms_until_next_window(scale_ms)
+      Logger.warning(
+        "Rate limited scope=#{scope} key=#{key} count=#{count} limit=#{limit} " <>
+          "retry_after_ms=#{retry_after_ms}"
+      )
+      {:error, {:rate_limited, retry_after_ms}}
     end
   end
 
@@ -57,5 +61,12 @@ defmodule StackoverflowClone.RateLimiter do
   defp bucket_key(scope, key, scale_ms, offset \\ 0) do
     window = div(System.system_time(:millisecond), scale_ms) + offset
     "#{scope}:#{key}:#{window}"
+  end
+
+  defp ms_until_next_window(scale_ms) do
+    now_ms = System.system_time(:millisecond)
+    current_window = div(now_ms, scale_ms)
+    next_window_start_ms = (current_window + 1) * scale_ms
+    max(1, next_window_start_ms - now_ms)
   end
 end
